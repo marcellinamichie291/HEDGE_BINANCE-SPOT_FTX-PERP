@@ -227,7 +227,7 @@ class hedge:
         response = self.fut_exchange.fetch_positions(symbols=[self.fut_PAIR])
         for res in response:
             if res['side']=='short':
-                if res['contracts']>0.0:
+                if abs(float(res['contracts']))>0.0:
                     qty = res['contracts']
         return qty
 
