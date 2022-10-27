@@ -228,7 +228,7 @@ class hedge:
         for res in response:
             if res['side']=='short':
                 if abs(float(res['contracts']))>0.0:
-                    qty = res['contracts']
+                    qty = abs(float(res['contracts']))
         return qty
 
 
