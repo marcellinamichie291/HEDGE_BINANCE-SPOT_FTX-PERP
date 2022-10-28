@@ -5,6 +5,10 @@ import time
 import os
 import sys
 
+abspath = os.path.abspath(__file__)
+dname = os.path.dirname(abspath)
+os.chdir(dname)
+
 ################################################################################
 ASSETS_TO_HEDGE = ['AVAX']
 
@@ -96,6 +100,23 @@ class hedge:
             print('Done')
             return None
 
+################################################################################
+    def get_mid_price(self):
+        orderbook = self.spot_exchange.fetch_order_book(self.PAIR)
+        ask = orderbook['asks'][0][0]
+        bid = orderbook['bids'][0][0]
+        mid_price = (ask+bid)/2.0
+        return mid_price
+
+    def get_already_open_quantity(self):
+        qty = 0.0
+        response = self.fut_exchange.fetch_positions(symbols=[self.fut_PAIR])
+        for res in response:
+            if res['side']=='short':
+                if abs(float(res['contracts']))>0.0:
+                    qty = abs(float(res['contracts']))
+        return qty
+        
 ################################################################################
     def INCREASE_SHORT_MAKER_FAST(self, COIN_amount):
 
@@ -213,24 +234,6 @@ class hedge:
                         print("order failed to be canceled")
                         pass
         return COIN_amount, price
-################################################################################
-
-    def get_mid_price(self):
-        orderbook = self.spot_exchange.fetch_order_book(self.PAIR)
-        ask = orderbook['asks'][0][0]
-        bid = orderbook['bids'][0][0]
-        mid_price = (ask+bid)/2.0
-        return mid_price
-
-    def get_already_open_quantity(self):
-        qty = 0.0
-        response = self.fut_exchange.fetch_positions(symbols=[self.fut_PAIR])
-        for res in response:
-            if res['side']=='short':
-                if abs(float(res['contracts']))>0.0:
-                    qty = abs(float(res['contracts']))
-        return qty
-
 
 ################################################################################
 ############################### MAIN ###########################################
