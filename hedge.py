@@ -82,9 +82,9 @@ class hedge:
         print(f"{self.COIN} short position size on {self.FUT_exchange_n}: {self.qtty_in_short}")
         
         qty_to_open = self.COIN_TOTAL-self.qtty_in_short
-        print(qty_to_open)
+        print(f"diff: {qty_to_open}")
         qty_to_open = round(qty_to_open,self.nb_digits_after_point)
-        print(qty_to_open)
+        print(f"diff rounded to allowed precision by exchange: {qty_to_open}")
         qty_to_open = float(self.fut_exchange.amount_to_precision(self.fut_PAIR,qty_to_open))
         print(f"quantity of {self.fut_PAIR} to increase or reduce: {qty_to_open}")
 
