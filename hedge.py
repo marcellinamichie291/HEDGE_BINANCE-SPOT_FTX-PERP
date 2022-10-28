@@ -10,27 +10,31 @@ dname = os.path.dirname(abspath)
 os.chdir(dname)
 
 ################################################################################
-ASSETS_TO_HEDGE = ['AVAX']
+ASSETS_TO_HEDGE = ['AVAX','FRONT','FIRO','RLC']
 
+G_FUT_exchange_n=''
 ################################################################################
 
 class hedge:
 
     def __init__(self, COIN):
+        global G_FUT_exchange_n
         with open('settings.json', 'r') as f:
             json_obj = json.load(f)
-
+            
+        self.COIN = COIN
         self.max_time_order_sec = 10
 
-        SPOT_exchange_n = json_obj['exchange_name']
-        FUT_exchange_n = json_obj['futures_exchange_name']
+        self.SPOT_exchange_n = json_obj['exchange_name']
+        self.FUT_exchange_n = json_obj['futures_exchange_name']
+        G_FUT_exchange_n = self.FUT_exchange_n
         
         self.API_KEY = json_obj['API_KEY']
         self.API_SECRET = json_obj['API_SECRET']
         self.F_API_KEY = json_obj['F_API_KEY']
         self.F_API_SECRET = json_obj['F_API_SECRET']
 
-        if SPOT_exchange_n.lower() == 'binance':
+        if self.SPOT_exchange_n.lower() == 'binance':
             self.spot_exchange = ccxt.binance({
                 'apiKey': self.API_KEY,
                 'secret': self.API_SECRET,
@@ -40,7 +44,7 @@ class hedge:
                 },
             })
         
-        if FUT_exchange_n.lower() == 'ftx':
+        if self.FUT_exchange_n.lower() == 'ftx':
             self.fut_exchange = ccxt.ftx({
                 'apiKey': self.F_API_KEY,
                 'secret': self.F_API_SECRET,
@@ -57,26 +61,29 @@ class hedge:
         self.markets = self.spot_exchange.load_markets()
         self.market = self.spot_exchange.market(self.PAIR)
         self.balance = self.spot_exchange.fetch_balance()
-        self.COIN_TOTAL = float(self.balance['total'][COIN])
-        print(f"{COIN} quantity on {SPOT_exchange_n}: {self.COIN_TOTAL}")
+        
 
         self.f_markets = self.fut_exchange.load_markets()
         self.f_market = self.fut_exchange.market(self.fut_PAIR)
         self.f_balance = self.fut_exchange.fetch_balance()
         prec = self.f_market['precision']['amount']
-        nb_digits_after_point = int(-1*math.log10(prec))
+        self.nb_digits_after_point = int(-1*math.log10(prec))
         self.min_amount_COIN = self.f_market['limits']['amount']['min']
+
+    def process(self):
+        self.COIN_TOTAL = float(self.balance['total'][self.COIN])
+        print(f"{self.COIN} quantity on {self.SPOT_exchange_n}: {self.COIN_TOTAL}")
         self.USD_TOTAL = float(self.f_balance['total']['USD'])
-        print(f"USD quantity on {FUT_exchange_n} : {self.USD_TOTAL}")
+        print(f"USD quantity on {self.FUT_exchange_n} : {self.USD_TOTAL}")
 
         mid_price = self.get_mid_price()
 
         self.qtty_in_short = self.get_already_open_quantity()
-        print(f"{COIN} short position size on {FUT_exchange_n}: {self.qtty_in_short}")
+        print(f"{self.COIN} short position size on {self.FUT_exchange_n}: {self.qtty_in_short}")
         
         qty_to_open = self.COIN_TOTAL-self.qtty_in_short
         print(qty_to_open)
-        qty_to_open = round(qty_to_open,nb_digits_after_point)
+        qty_to_open = round(qty_to_open,self.nb_digits_after_point)
         print(qty_to_open)
         qty_to_open = float(self.fut_exchange.amount_to_precision(self.fut_PAIR,qty_to_open))
         print(f"quantity of {self.fut_PAIR} to increase or reduce: {qty_to_open}")
@@ -100,6 +107,10 @@ class hedge:
             print('Done')
             return None
 
+################################################################################   
+    def close_session(self):
+        pass
+
 ################################################################################
     def get_mid_price(self):
         orderbook = self.spot_exchange.fetch_order_book(self.PAIR)
@@ -116,7 +127,7 @@ class hedge:
                 if abs(float(res['contracts']))>0.0:
                     qty = abs(float(res['contracts']))
         return qty
-        
+
 ################################################################################
     def INCREASE_SHORT_MAKER_FAST(self, COIN_amount):
 
@@ -241,4 +252,10 @@ class hedge:
 if __name__ == "__main__":
 
     for asset in ASSETS_TO_HEDGE:
-        hedger = hedge(asset)
+        try:
+            hedger = hedge(asset)
+            hedger.process()
+            hedger.close_session()
+            del hedger
+        except ccxt.errors.BadSymbol as e:
+            print(f"error: ccxt.errors.BadSymbol: {G_FUT_exchange_n} does not have market symbol {asset}-PERP")
