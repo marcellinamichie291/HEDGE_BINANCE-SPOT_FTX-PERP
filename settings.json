@@ -1,8 +1,11 @@
 {
     "exchange_name" : "Binance",
-    "API_KEY": "kgadkrjgldh87365h",
-    "API_SECRET": "slrhgerphihvbfl85hklsgld",
+    "API_KEY": "hjghkj78f",
+    "API_SECRET": "hjghkj78f",
     "futures_exchange_name" : "ftx",
-    "F_API_KEY": "bellaciobellaciao04953957",
-    "F_API_SECRET": "fdawpewgauopMXZVNPWOITYRI20456VSRF05"
+    "F_API_KEY": "hjghkj78f",
+    "F_API_SECRET": "hjghkj78f",
+    "margin_exchange_name" : "Binance",
+    "M_API_KEY": "hjghkj78f",
+    "M_API_SECRET": "hjghkj78f"
 }
