@@ -22,7 +22,7 @@ if __name__ == "__main__":
     for asset in ASSETS_TO_UNSET:
 
         # unset hedging
-        print('Unsetting Hedge (short position) on margin account if necessary...')
+        print(f'{asset}: Unsetting Hedge (short position) on margin account if necessary...')
         hedger = hedge_margin(asset)
         hedger.close_short_position()
         hedger.repay_and_transfer_margin_to_spot_account()
@@ -31,14 +31,14 @@ if __name__ == "__main__":
         print('Done.')
 
         # sell all asset
-        print('Selling spot asset if necessary...')
+        print(f'{asset}: Selling spot asset if necessary...')
         seller = buyer_or_seller(asset)
         seller.sell_all()
         del seller
         print('Done.')
 
         # re-balance BUSD and USDT
-        print('Rebalancing USDT and BUSD to equal amounts if necessary.')
+        print(f'{asset}: Rebalancing USDT and BUSD to equal amounts if necessary.')
         reba = rebalancer()
         reba.re_balance()
         del reba
