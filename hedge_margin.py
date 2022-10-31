@@ -82,6 +82,9 @@ class hedge_margin:
         
         print(f"Borrowed quantity on margin account on {self.MARGIN_exchange_n} : {self.AMOUNT_COIN_BORROWED}")
         print(f"Position size on margin account on {self.MARGIN_exchange_n} : {self.MARGIN_POSITION_SIZE}  (negative for short)")
+        if (self.MARGIN_POSITION_SIZE>0.0001):
+            print('Positive position, but it should be negative or 0, something is wrong.')
+            sys.exit()
         print(f"Margin amount of BUSD on {self.MARGIN_exchange_n} : {self.MARGIN_AMOUNT_BUSD}")
 
         self.COIN_TOTAL = float(self.balance['total'][self.COIN])
