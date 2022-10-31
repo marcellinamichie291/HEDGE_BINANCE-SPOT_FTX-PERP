@@ -23,7 +23,7 @@ class hedge:
             json_obj = json.load(f)
             
         self.COIN = COIN
-        self.max_time_order_sec = 10
+        self.max_time_order_sec = 20
 
         self.SPOT_exchange_n = json_obj['exchange_name']
         self.FUT_exchange_n = json_obj['futures_exchange_name']
@@ -131,7 +131,7 @@ class hedge:
 ################################################################################
     def INCREASE_SHORT_MAKER_FAST(self, COIN_amount):
 
-        max_limit_orders_to_try = 10
+        max_limit_orders_to_try = 20
 
         params = {
             'postOnly': True
@@ -190,7 +190,7 @@ class hedge:
 ################################################################################
     def REDUCE_SHORT_MAKER_FAST(self, COIN_amount):
 
-        max_limit_orders_to_try = 10
+        max_limit_orders_to_try = 20
 
         params = {
             'postOnly': True

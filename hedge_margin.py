@@ -67,10 +67,10 @@ class hedge_margin:
         self.f_markets = self.MARGIN_exchange.load_markets()
         self.f_market = self.MARGIN_exchange.market(self.MARGIN_PAIR)
         params={}
-        self.prec = self.f_market['precision']['amount']
-        self.nb_digits_after_point = int(-1*math.log10(self.prec))
+        self.nb_digits_after_point = self.f_market['precision']['amount']
         self.min_amount_COIN = self.f_market['limits']['amount']['min']
 
+        self.COIN_TOTAL = float(self.balance['total'][self.COIN])
 
         margin_iso = self.MARGIN_exchange.sapi_get_margin_isolated_account()
 
@@ -86,8 +86,8 @@ class hedge_margin:
             print('Positive position, but it should be negative or 0, something is wrong.')
             sys.exit()
         print(f"Margin amount of BUSD on {self.MARGIN_exchange_n} : {self.MARGIN_AMOUNT_BUSD}")
-
-        self.COIN_TOTAL = float(self.balance['total'][self.COIN])
+        print(f"Necessary Margin amount of BUSD on {self.MARGIN_exchange_n} : {2.0*self.COIN_TOTAL*self.get_mid_price()}")
+        
         print(f"{self.COIN} quantity on {self.SPOT_exchange_n}: {self.COIN_TOTAL}")
         self.BUSD_TOTAL = float(self.balance['total']['BUSD'])
         self.USDT_TOTAL = float(self.balance['total']['USDT'])
@@ -96,14 +96,25 @@ class hedge_margin:
 
         pass
 
+    def get_MARGIN_AMOUNT_BUSD(self):
+        margin_iso = self.MARGIN_exchange.sapi_get_margin_isolated_account()
+        for asset in margin_iso['assets']:
+            if asset['symbol']==self.MARGIN_PAIR.replace('/',''):
+                MARGIN_AMOUNT_BUSD = float(asset['quoteAsset']['netAsset'])
+        return MARGIN_AMOUNT_BUSD 
+
 ################################################################################
 
     def transfer_margin_or_borrow_if_necessary(self):
+
         mid_price = self.get_mid_price()
+
+        pc_diff = (2.0*self.COIN_TOTAL-self.MARGIN_AMOUNT_BUSD/mid_price)/(self.COIN_TOTAL)*100.0
+        print(pc_diff)
         
-        if (self.COIN_TOTAL-self.MARGIN_AMOUNT_BUSD/mid_price)/(self.MARGIN_AMOUNT_BUSD/mid_price)*100.0>5.0:
-            print('Transferring margin in BUSD...')
-            BUSD_to_transfer = round((self.COIN_TOTAL-self.MARGIN_AMOUNT_BUSD/mid_price)*mid_price)
+        if pc_diff>5.0:
+            print('Requiring more BUSD margin to be safe. Transferring from spot to margin in BUSD...')
+            BUSD_to_transfer = abs(math.ceil((1.1*self.COIN_TOTAL-self.MARGIN_AMOUNT_BUSD/mid_price)*mid_price))+1.0
             self.MARGIN_exchange.sapi_post_margin_isolated_transfer({
                 'asset': 'BUSD',
                 'amount': str(BUSD_to_transfer),
@@ -151,13 +162,65 @@ class hedge_margin:
         if qty_to_open > 0:
             print('Trying trade to increase short position...')
             coin_amt, price = self.INCREASE_SHORT_MAKER_FAST(qty_to_open)
-            print('Done')
+            print('Done.')
             return None
         else :
             print('Trying trade to reduce short position...')
             coin_amt, price = self.REDUCE_SHORT_MAKER_FAST(abs(qty_to_open))
-            print('Done')
+            print('Done.')
             return None
+
+################################################################################
+
+    def close_short_position(self):
+        print('Trying trade to reduce short position...')
+        qty_to_reduce = float(self.MARGIN_exchange.amount_to_precision(self.MARGIN_PAIR,round(abs(self.MARGIN_POSITION_SIZE),self.nb_digits_after_point)))
+        if qty_to_reduce*self.get_mid_price()>10.5:
+            coin_amt, price = self.REDUCE_SHORT_MAKER_FAST(qty_to_reduce)
+        else:
+            print('No need to reduce short position. Already at size 0 or close.')
+        print('Done.')
+
+################################################################################
+
+    def repay_and_transfer_margin_to_spot_account(self):
+
+        currency = self.MARGIN_exchange.currency(self.COIN)
+
+        amount = self.MARGIN_exchange.currency_to_precision(self.COIN, self.AMOUNT_COIN_BORROWED)
+
+        if self.AMOUNT_COIN_BORROWED*self.get_mid_price()>1.0:
+            print(f'Repaying borrowed {self.COIN}...')
+            self.MARGIN_exchange.sapi_post_margin_repay({
+                'asset': currency['id'],
+                'amount': amount,
+                'isIsolated': 'TRUE',
+                'symbol': self.MARGIN_PAIR.replace('/','')
+                })
+            print('Done.')
+
+        self.MARGIN_AMOUNT_BUSD = self.get_MARGIN_AMOUNT_BUSD()
+        if self.MARGIN_AMOUNT_BUSD>0.2:
+            print('Transfering BUSD from margin to spot...')
+            BUSD_to_transfer = abs(self.MARGIN_AMOUNT_BUSD)
+            is_error=True
+            while is_error:
+                try:
+                    self.MARGIN_exchange.sapi_post_margin_isolated_transfer({
+                        'asset': 'BUSD',
+                        'amount': str(self.MARGIN_exchange.currency_to_precision('BUSD',BUSD_to_transfer)),
+                        'symbol': self.MARGIN_PAIR.replace('/',''),
+                        'transFrom': 'ISOLATED_MARGIN',
+                        'transTo': 'SPOT'
+                        })
+                    is_error=False
+                except Exception as e:
+                    BUSD_to_transfer = round(BUSD_to_transfer,2)-0.02
+                    print(f'Amount to transfer is too high, reducing by 0.1 BUSD, new amount: {BUSD_to_transfer}')
+                    print(str(e))
+                    time.sleep(1)
+            print('Done.')
+
 
 ################################################################################   
     def close_session(self):
@@ -234,7 +297,7 @@ class hedge_margin:
                         break
                     try:
                         self.MARGIN_exchange.cancelOrder(idd, self.MARGIN_PAIR.replace('/',''), params=params)
-                        print("order has been canceled")
+                        print(f"order has been canceled ({market_buy_counter}/{max_limit_orders_to_try})")
                     except:
                         print("order failed to be canceled")
                         pass
@@ -243,7 +306,7 @@ class hedge_margin:
 ################################################################################
     def REDUCE_SHORT_MAKER_FAST(self, COIN_amount):
 
-        max_limit_orders_to_try = 10
+        max_limit_orders_to_try = 20
 
         params = {
             'type': 'margin',
@@ -278,7 +341,7 @@ class hedge_margin:
                         print("too much order failed, doing market buy")
                         try:
                             self.MARGIN_exchange.cancelOrder(idd, self.MARGIN_PAIR.replace('/',''), params=params)
-                            print("order has been canceled")
+                            print(f"order has been canceled")
                         except:
                             print("order failed to be canceled")
                             pass
@@ -294,7 +357,7 @@ class hedge_margin:
                         break
                     try:
                         self.MARGIN_exchange.cancelOrder(idd, self.MARGIN_PAIR.replace('/',''), params=params)
-                        print("order has been canceled")
+                        print(f"order has been canceled ({market_buy_counter}/{max_limit_orders_to_try})")
                     except:
                         print("order failed to be canceled")
                         pass
